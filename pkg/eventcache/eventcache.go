@@ -195,6 +195,9 @@ func (ec *Cache) Needed(proc *tetragon.Process) bool {
 	if proc == nil {
 		return true
 	}
+	if process.IsUnknown(proc) {
+		return false
+	}
 	if option.Config.EnableK8s {
 		if proc.Docker != "" && proc.Pod == nil {
 			return true

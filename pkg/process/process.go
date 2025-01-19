@@ -463,6 +463,26 @@ func GetPodInfo(containerID, bin, args string, nspid uint32) *tetragon.Pod {
 	return getPodInfo(k8s, containerID, bin, args, nspid)
 }
 
+var (
+	unknownProcess = tetragon.Process{
+		Binary: "unknown",
+	}
+	unknownInternal = ProcessInternal{
+		process: &unknownProcess,
+	}
+)
+
+func IsUnknown(proc *tetragon.Process) bool {
+	return proc == &unknownProcess
+}
+
+func GetParentProcessInternalUnknown(pid uint32, ktime uint64, unknown bool) (*ProcessInternal, *ProcessInternal) {
+	if unknown {
+		return &unknownInternal, &unknownInternal
+	}
+	return GetParentProcessInternal(pid, ktime)
+}
+
 func GetParentProcessInternal(pid uint32, ktime uint64) (*ProcessInternal, *ProcessInternal) {
 	var parent, process *ProcessInternal
 	var err error

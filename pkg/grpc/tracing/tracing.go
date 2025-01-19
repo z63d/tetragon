@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/cilium/tetragon/api/v1/tetragon"
+	"github.com/cilium/tetragon/pkg/api/processapi"
 	"github.com/cilium/tetragon/pkg/api/tracingapi"
 	api "github.com/cilium/tetragon/pkg/api/tracingapi"
 	"github.com/cilium/tetragon/pkg/eventcache"
@@ -283,7 +284,8 @@ func GetProcessKprobe(event *MsgGenericKprobeUnix) *tetragon.ProcessKprobe {
 	var tetragonArgs []*tetragon.KprobeArgument
 	var tetragonReturnArg *tetragon.KprobeArgument
 
-	proc, parent := process.GetParentProcessInternal(event.Msg.ProcessKey.Pid, event.Msg.ProcessKey.Ktime)
+	unknown := event.Msg.Common.Flags&processapi.MSG_COMMON_FLAG_PROCESS_NOT_FOUND != 0
+	proc, parent := process.GetParentProcessInternalUnknown(event.Msg.ProcessKey.Pid, event.Msg.ProcessKey.Ktime, unknown)
 	if proc == nil {
 		tetragonProcess = &tetragon.Process{
 			Pid:       &wrapperspb.UInt32Value{Value: event.Msg.ProcessKey.Pid},
@@ -374,19 +376,19 @@ func GetProcessKprobe(event *MsgGenericKprobeUnix) *tetragon.ProcessKprobe {
 		Tags:             event.Tags,
 	}
 
-	if tetragonProcess.Pid == nil {
+	if !process.IsUnknown(tetragonProcess) && tetragonProcess.Pid == nil {
 		eventcache.CacheErrors(eventcache.NilProcessPid, notify.EventType(tetragonEvent)).Inc()
 		return nil
 	}
 
 	if ec := eventcache.Get(); ec != nil &&
 		(ec.Needed(tetragonProcess) ||
-			(tetragonProcess.Pid.Value > 1 && ec.Needed(tetragonParent))) {
+			(tetragonProcess.Pid != nil && tetragonProcess.Pid.Value > 1 && ec.Needed(tetragonParent))) {
 		ec.Add(nil, tetragonEvent, event.Msg.Common.Ktime, event.Msg.ProcessKey.Ktime, event)
 		return nil
 	}
 
-	if proc != nil {
+	if !process.IsUnknown(tetragonProcess) && proc != nil {
 		// At kprobes we report the per thread fields, so take a copy
 		// of the thread leader from the cache then update the corresponding
 		// per thread fields.
