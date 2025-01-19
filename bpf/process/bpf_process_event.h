@@ -603,4 +603,32 @@ set_in_init_tree(struct execve_map_value *curr, struct execve_map_value *parent)
 		DEBUG("%s: nspid=1", __func__);
 	}
 }
+
+FUNC_INLINE void
+init_execve_map_value(struct execve_map_value *curr, struct execve_map_value *parent,
+		      struct task_struct *task)
+{
+	curr->flags = EVENT_COMMON_FLAG_CLONE;
+	curr->key.pid = BPF_CORE_READ(task, tgid);
+	curr->key.ktime = ktime_get_ns();
+	curr->nspid = get_task_pid_vnr_by_task(task);
+	memcpy(&curr->bin, &parent->bin, sizeof(curr->bin));
+	curr->pkey = parent->key;
+
+	/* Store the thread leader capabilities so we can check later
+	 * before the execve hook point if they changed or not.
+	 * This needs to be converted later to credentials.
+	 */
+	get_current_subj_caps(&curr->caps, task);
+
+	/* Store the thread leader namespaces so we can check later
+	 * before the execve hook point if they changed or not.
+	 */
+	get_namespaces(&curr->ns, task);
+
+	/* Set EVENT_IN_INIT_TREE flag on the process if its parent is in a
+	 * container's init tree or if it has nspid=1.
+	 */
+	set_in_init_tree(curr, parent);
+}
 #endif
